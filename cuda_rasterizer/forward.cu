@@ -361,10 +361,10 @@ renderCUDA(
 			// Eq. (3) from 3D Gaussian splatting paper.
 			for (int ch = 0; ch < CHANNELS; ch++)
 				C[ch] += features[collected_id[j] * CHANNELS + ch] * alpha * T;
-			
-			out_weight[collected_id[j] * H * W + pix_id] = alpha * T;
-			out_visible[collected_id[j] * H * W + pix_id] = contributor;
-
+			if (contributor < MAX_CONTRIBUTERS){
+				out_weight[contributor * H * W + pix_id] = alpha * T;
+				out_visible[contributor * H * W + pix_id] = collected_id[j];
+			}
             // Mean depth:
 //             float dep = collected_depth[j];
 //             D += dep * alpha * T;
