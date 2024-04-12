@@ -152,7 +152,7 @@ __device__ void computeCov3D(const glm::vec3 scale, float mod, const glm::vec4 r
 }
 
 // Perform initial steps for each Gaussian prior to rasterization.
-template<int C>
+template<int CHANNELS>
 __global__ void preprocessCUDA(int P, int D, int M,
 	const float* orig_points,
 	const glm::vec3* scales,
@@ -241,9 +241,9 @@ __global__ void preprocessCUDA(int P, int D, int M,
 	if (colors_precomp == nullptr)
 	{
 		glm::vec3 result = computeColorFromSH(idx, D, M, (glm::vec3*)orig_points, *cam_pos, shs, clamped);
-		rgb[idx * C + 0] = result.x;
-		rgb[idx * C + 1] = result.y;
-		rgb[idx * C + 2] = result.z;
+		rgb[idx * CHANNELS + 0] = result.x;
+		rgb[idx * CHANNELS + 1] = result.y;
+		rgb[idx * CHANNELS + 2] = result.z;
 	}
 
 	// Store some useful helper data for the next steps.
@@ -272,7 +272,9 @@ renderCUDA(
 	const float* __restrict__ bg_color,
 	float* __restrict__ out_color,
 	const float* __restrict__ depth,
-	float* __restrict__ out_depth)
+	float* __restrict__ out_depth,
+	float* __restrict__ out_weight,
+	float* __restrict__ out_visible)
 {
 	// Identify current tile and associated min/max pixel range.
 	auto block = cg::this_thread_block();
@@ -359,6 +361,9 @@ renderCUDA(
 			// Eq. (3) from 3D Gaussian splatting paper.
 			for (int ch = 0; ch < CHANNELS; ch++)
 				C[ch] += features[collected_id[j] * CHANNELS + ch] * alpha * T;
+			
+			out_weight[collected_id[j] * H * W + pix_id] = alpha * T;
+			out_visible[collected_id[j] * H * W + pix_id] = contributor;
 
             // Mean depth:
 //             float dep = collected_depth[j];
@@ -370,7 +375,6 @@ renderCUDA(
 			    float dep = collected_depth[j];
 				D = dep;
 			}
-
 
 			T = test_T;
 
@@ -405,7 +409,9 @@ void FORWARD::render(
 	const float* bg_color,
 	float* out_color,
 	const float* depth,
-	float* out_depth)
+	float* out_depth,
+	float* out_weight,
+	float* out_visible)
 {
 	renderCUDA<NUM_CHANNELS> << <grid, block >> > (
 		ranges,
@@ -419,7 +425,9 @@ void FORWARD::render(
 		bg_color,
 		out_color,
 		depth,
-		out_depth);
+		out_depth,
+		out_weight,
+		out_visible);
 }
 
 void FORWARD::preprocess(int P, int D, int M,
