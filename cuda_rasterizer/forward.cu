@@ -361,7 +361,7 @@ renderCUDA(
 			// Eq. (3) from 3D Gaussian splatting paper.
 			for (int ch = 0; ch < CHANNELS; ch++)
 				C[ch] += features[collected_id[j] * CHANNELS + ch] * alpha * T;
-			if (contributor < MAX_CONTRIBUTERS){
+			if (contributor < 1000){
 				out_weight[contributor * H * W + pix_id] = alpha * T;
 				out_visible[contributor * H * W + pix_id] = collected_id[j];
 			}
