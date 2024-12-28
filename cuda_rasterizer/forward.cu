@@ -71,7 +71,7 @@ __device__ glm::vec3 computeColorFromSH(int idx, int deg, int max_coeffs, const 
 }
 
 // Forward version of 2D covariance matrix computation
-__device__ float3 computeCov2D(const float3& mean, float focal_x, float focal_y, float tan_fovx, float tan_fovy, const float* cov3D, const float* viewmatrix)
+__device__ float3 computeCov2D(const float3& mean, float focal_x, float focal_y, float tan_fovx, float tan_fovy, const float* cov3D, const float* viewmatrix, float WIDTH, float HEIGHT)
 {
 	// The following models the steps outlined by equations 29
 	// and 31 in "EWA Splatting" (Zwicker et al., 2002). 
@@ -81,10 +81,17 @@ __device__ float3 computeCov2D(const float3& mean, float focal_x, float focal_y,
 
 	const float limx = 1.3f * tan_fovx;
 	const float limy = 1.3f * tan_fovy;
+	// Jonahton Luiten trick not implemented
+	// const float lim_x_pos = (WIDTH - cx) / focal_x + 0.3f * tan_fovx;
+    // const float lim_x_neg = cx / focal_x + 0.3f * tan_fovx;
+    // const float lim_y_pos = (HEIGHT - cy) / focal_y + 0.3f * tan_fovy;
+    // const float lim_y_neg = cy / focal_y + 0.3f * tan_fovy;
 	const float txtz = t.x / t.z;
 	const float tytz = t.y / t.z;
 	t.x = min(limx, max(-limx, txtz)) * t.z;
 	t.y = min(limy, max(-limy, tytz)) * t.z;
+	// t.x = t.z * min(lim_x_pos, max(-lim_x_neg, txtz));
+    // t.y = t.z * min(lim_y_pos, max(-lim_y_neg, tytz));
 
 	glm::mat3 J = glm::mat3(
 		focal_x / t.z, 0.0f, -(focal_x * t.x) / (t.z * t.z),
@@ -213,7 +220,7 @@ __global__ void preprocessCUDA(int P, int D, int M,
 	}
 
 	// Compute 2D screen-space covariance matrix
-	float3 cov = computeCov2D(p_orig, focal_x, focal_y, tan_fovx, tan_fovy, cov3D, viewmatrix);
+	float3 cov = computeCov2D(p_orig, focal_x, focal_y, tan_fovx, tan_fovy, cov3D, viewmatrix, W, H);
 
 	// Invert covariance (EWA algorithm)
 	float det = (cov.x * cov.z - cov.y * cov.y);
@@ -250,6 +257,7 @@ __global__ void preprocessCUDA(int P, int D, int M,
 	depths[idx] = p_view.z;
 	radii[idx] = my_radius;
 	points_xy_image[idx] = point_image;
+
 	// Inverse 2D covariance and opacity neatly pack into one float4
 	conic_opacity[idx] = { conic.x, conic.y, conic.z, opacities[idx] };
 	tiles_touched[idx] = (rect_max.y - rect_min.y) * (rect_max.x - rect_min.x);
@@ -304,6 +312,7 @@ renderCUDA(
 	// Initialize helper variables
 	float T = 1.0f;
 	uint32_t contributor = 0;
+	uint32_t contributor_flow = 0;
 	uint32_t last_contributor = 0;
 	float C[CHANNELS] = { 0 };
 // 	float D = 0.0f;  // Mean Depth
@@ -349,6 +358,7 @@ renderCUDA(
 			// and its exponential falloff from mean.
 			// Avoid numerical instabilities (see paper appendix). 
 			float alpha = min(0.99f, con_o.w * exp(power));
+			
 			if (alpha < 1.0f / 255.0f)
 				continue;
 			float test_T = T * (1 - alpha);
@@ -361,10 +371,12 @@ renderCUDA(
 			// Eq. (3) from 3D Gaussian splatting paper.
 			for (int ch = 0; ch < CHANNELS; ch++)
 				C[ch] += features[collected_id[j] * CHANNELS + ch] * alpha * T;
+			
 			if (contributor < MAX_CONTRIBUTERS){
 				out_weight[contributor * H * W + pix_id] = alpha * T;
 				out_visible[contributor * H * W + pix_id] = collected_id[j];
 			}
+
             // Mean depth:
 //             float dep = collected_depth[j];
 //             D += dep * alpha * T;

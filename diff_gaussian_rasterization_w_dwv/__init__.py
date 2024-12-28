@@ -25,6 +25,7 @@ def rasterize_gaussians(
     cov3Ds_precomp,
     raster_settings,
 ):
+
     return _RasterizeGaussians.apply(
         means3D,
         means2D,
@@ -77,8 +78,7 @@ class _RasterizeGaussians(torch.autograd.Function):
         # Invoke C++/CUDA rasterizer
         # num_rendered, color, radii, geomBuffer, binningBuffer, imgBuffer = _C.rasterize_gaussians(*args)
         num_rendered, color, radii, geomBuffer, binningBuffer, imgBuffer, depth, weight, visible  = _C.rasterize_gaussians(*args)
-        print(weight.shape)
-        quit()
+
         # Keep relevant tensors for backward
         ctx.raster_settings = raster_settings
         ctx.num_rendered = num_rendered

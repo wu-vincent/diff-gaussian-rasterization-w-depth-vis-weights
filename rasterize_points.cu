@@ -67,9 +67,9 @@ RasterizeGaussiansCUDA(
   torch::Tensor out_color = torch::full({NUM_CHANNELS, H, W}, 0.0, float_opts);
   torch::Tensor radii = torch::full({P}, 0, means3D.options().dtype(torch::kInt32));
   torch::Tensor out_depth = torch::full({1, H, W}, 0.0, float_opts);
-  torch::Tensor out_weight = torch::full({P, H, W}, 0.0, float_opts);
-  torch::Tensor out_visible = torch::full({P, H, W}, 0.0, float_opts);
-  
+  torch::Tensor out_weight = torch::full({MAX_CONTRIBUTERS, H, W}, 0.0, float_opts);
+  torch::Tensor out_visible = torch::full({MAX_CONTRIBUTERS, H, W}, 0.0, float_opts);
+
   torch::Device device(torch::kCUDA);
   torch::TensorOptions options(torch::kByte);
   torch::Tensor geomBuffer = torch::empty({0}, options.device(device));
@@ -78,6 +78,8 @@ RasterizeGaussiansCUDA(
   std::function<char*(size_t)> geomFunc = resizeFunctional(geomBuffer);
   std::function<char*(size_t)> binningFunc = resizeFunctional(binningBuffer);
   std::function<char*(size_t)> imgFunc = resizeFunctional(imgBuffer);
+
+  //printf("Hello from weigth %d, P %d, max contrib %d\n", out_weight.size(0), P, MAX_CONTRIBUTERS);
   
   int rendered = 0;
   if(P != 0)
